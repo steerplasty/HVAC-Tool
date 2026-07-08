@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>HVAC Field Diagnostic Tool — First Due Cooling</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<style>
+:root{
+  --navy:#1B2A4A; --navy-deep:#12203C; --red:#C8352E; --gold:#D9A441;
+  --paper:#F5F6F8; --card:#FFFFFF; --ink:#1A1D23; --mut:#5A6272; --line:#D8DCE4;
+  --ok:#1E7A46; --warnbg:#FBEAE9; --okbg:#E8F4EC; --infobg:#EEF2FA;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:'Barlow',system-ui,sans-serif;background:var(--paper);color:var(--ink);padding-bottom:120px}
+.plate{background:var(--navy);color:#fff;padding:16px 16px 14px;border-bottom:4px solid var(--gold)}
+.plate-row{display:flex;align-items:center;gap:12px;max-width:760px;margin:0 auto}
+.plate h1{font-family:'Barlow Semi Condensed';font-weight:700;font-size:20px;letter-spacing:.06em;text-transform:uppercase;line-height:1.1}
+.plate .sub{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin-top:2px}
+.wrap{max-width:760px;margin:0 auto;padding:12px}
+.modes{display:flex;background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:8px}
+.modes button{flex:1;border:0;background:none;padding:13px 4px;font-family:'Barlow Semi Condensed';font-weight:700;
+  font-size:13px;letter-spacing:.05em;text-transform:uppercase;color:var(--mut);cursor:pointer;border-bottom:3px solid transparent}
+.modes button.on{color:var(--navy);border-bottom-color:var(--red);background:#FBFBFC}
+.toolbar{display:flex;justify-content:flex-end;margin-bottom:8px}
+.toolbar label{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mut);font-weight:600}
+.toolbar input{width:20px;height:20px;accent-color:var(--navy)}
+details{background:var(--card);border:1px solid var(--line);border-radius:10px;margin-bottom:12px;overflow:hidden}
+summary{list-style:none;cursor:pointer;padding:14px 16px;display:flex;align-items:center;gap:10px;
+  font-family:'Barlow Semi Condensed';font-weight:700;font-size:16px;letter-spacing:.05em;text-transform:uppercase;color:var(--navy);
+  border-left:4px solid var(--gold)}
+summary::-webkit-details-marker{display:none}
+summary .chev{margin-left:auto;transition:transform .15s;color:var(--mut)}
+details[open] summary .chev{transform:rotate(90deg)}
+.body{padding:4px 16px 16px;border-top:1px solid var(--line)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid .full{grid-column:1/-1}
+label.f{display:block;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--mut);margin:10px 0 4px}
+input[type=text],input[type=date],select,textarea{
+  width:100%;font-size:16px;font-family:'Barlow';padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--navy);outline-offset:1px}
+textarea{min-height:80px;resize:vertical}
+.unit{position:relative}
+.unit input{padding-right:56px}
+.unit span{position:absolute;right:12px;bottom:12px;font-size:13px;color:var(--mut);font-weight:600}
+.fhint{font-size:12px;color:var(--mut);margin-top:4px;line-height:1.45}
+body.nohints .fhint{display:none}
+.calcbar{position:fixed;left:0;right:0;bottom:0;background:var(--navy-deep);border-top:3px solid var(--gold);padding:10px 12px;z-index:50}
+.calcbar .in{max-width:760px;margin:0 auto;display:flex;gap:8px;align-items:center}
+.pill{flex:1;text-align:center;border-radius:8px;padding:6px 4px;background:rgba(255,255,255,.07)}
+.pill b{display:block;font-family:'Barlow Semi Condensed';font-size:18px;color:#fff}
+.pill i{font-style:normal;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#9AA5BC}
+.pill.ok b{color:#6FD79A}.pill.warn b{color:#F08A84}
+.btn{appearance:none;border:0;border-radius:8px;font-family:'Barlow Semi Condensed';font-weight:700;font-size:15px;
+  letter-spacing:.06em;text-transform:uppercase;padding:14px 18px;cursor:pointer;position:relative}
+.btn-pdf{background:var(--red);color:#fff;flex:0 0 auto}
+.btn-pdf .n{position:absolute;top:-7px;right:-7px;background:var(--gold);color:var(--navy);font-size:12px;
+  border-radius:99px;min-width:20px;height:20px;line-height:20px;display:none}
+.rowbtns{display:flex;gap:10px;margin-top:14px}
+.btn-ghost{background:#fff;color:var(--navy);border:2px solid var(--navy);flex:1}
+.check{display:flex;align-items:center;gap:12px;padding:12px 4px;border-bottom:1px solid var(--line);font-size:15px}
+.check:last-child{border-bottom:0}
+.check input{width:24px;height:24px;accent-color:var(--navy);flex:0 0 auto}
+.sig{border:1px dashed var(--line);border-radius:8px;background:#fff;touch-action:none;width:100%;height:120px;display:block}
+.sig-tools{display:flex;justify-content:space-between;align-items:center;margin-top:4px}
+.sig-tools button{background:none;border:0;color:var(--red);font-weight:600;font-size:13px;cursor:pointer}
+.hint{font-size:12px;color:var(--mut);margin-top:6px;line-height:1.4}
+.badge-note{font-size:12px;color:var(--mut);padding:8px 10px;background:var(--paper);border-radius:8px;margin-top:10px;line-height:1.5}
+#feed{display:flex;flex-direction:column;gap:8px;padding-top:10px}
+.chk-item{display:flex;gap:10px;padding:10px 12px;border-radius:8px;font-size:14px;line-height:1.5;align-items:flex-start}
+.chk-item .dot{width:10px;height:10px;border-radius:99px;margin-top:5px;flex:0 0 auto}
+.chk-item.ok{background:var(--okbg)}.chk-item.ok .dot{background:var(--ok)}
+.chk-item.warn{background:var(--warnbg)}.chk-item.warn .dot{background:var(--red)}
+.chk-item.info{background:var(--infobg)}.chk-item.info .dot{background:var(--navy)}
+.chk-item b{font-weight:600}
+.empty-feed{font-size:13px;color:var(--mut);padding:12px 4px}
+.tesp{display:flex;align-items:baseline;gap:8px;margin-top:10px;font-family:'Barlow Semi Condensed'}
+.tesp b{font-size:22px;color:var(--navy)}
+.tesp span{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
+[data-hide]{display:none!important}
+@media(min-width:600px){.grid{grid-template-columns:repeat(3,1fr)}.grid .full{grid-column:1/-1}}
+</style>
+</head>
+<body>
+
+<header class="plate">
+  <div class="plate-row">
+    <svg width="44" height="44" viewBox="0 0 100 100" aria-hidden="true">
+      <path d="M50 4 L60 22 A32 32 0 0 1 78 40 L96 50 L78 60 A32 32 0 0 1 60 78 L50 96 L40 78 A32 32 0 0 1 22 60 L4 50 L22 40 A32 32 0 0 1 40 22 Z" fill="#C8352E" stroke="#D9A441" stroke-width="3"/>
+      <g stroke="#fff" stroke-width="4" stroke-linecap="round">
+        <line x1="50" y1="30" x2="50" y2="70"/><line x1="30" y1="50" x2="70" y2="50"/>
+        <line x1="36" y1="36" x2="64" y2="64"/><line x1="64" y1="36" x2="36" y2="64"/>
+      </g>
+    </svg>
+    <div>
+      <h1>First Due Cooling</h1>
+      <div class="sub" id="plate-sub">System Startup &amp; Commissioning</div>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="modes" id="modes">
+    <button data-mode="startup" class="on">Startup</button>
+    <button data-mode="diag">Diagnostic</button>
+    <button data-mode="service">Annual Service</button>
+  </div>
+  <div class="toolbar">
+    <label><input type="checkbox" id="show_hints" checked onchange="document.body.classList.toggle('nohints',!this.checked)"> Show measurement guidance</label>
+  </div>
+  <div id="app"></div>
+</main>
+
+<div class="calcbar">
+  <div class="in">
+    <div class="pill" id="pill-sh"><b>—</b><i>Superheat</i></div>
+    <div class="pill" id="pill-sc"><b>—</b><i>Subcool</i></div>
+    <div class="pill" id="pill-dt"><b>—</b><i>Temp Split</i></div>
+    <button class="btn btn-pdf" onclick="makePDF()">PDF<span class="n" id="alertn"></span></button>
+  </div>
+</div>
+
+<script>
+// ================= MODES =================
+const MODES = {
+  startup:{sub:"System Startup & Commissioning", pdf:"HVAC SYSTEM STARTUP & COMMISSIONING REPORT"},
+  diag:{sub:"Diagnostic Service Visit", pdf:"HVAC DIAGNOSTIC SERVICE REPORT"},
+  service:{sub:"Annual Maintenance Visit", pdf:"ANNUAL HVAC MAINTENANCE REPORT"},
+};
+let MODE="startup";
+
+// ================= FORM DEFINITION =================
+// f.h = measurement guidance shown under the field (toggleable)
+const SECTIONS = [
+ {id:"job", title:"Job Information", fields:[
+   {k:"customer",l:"Customer Name",t:"text",cls:"full"},
+   {k:"address",l:"Job Address",t:"text",cls:"full"},
+   {k:"date",l:"Visit Date",t:"date"},
+   {k:"invoice",l:"Invoice / Job #",t:"text"},
+   {k:"tech",l:"Technician(s)",t:"text"},
+ ]},
+ {id:"equip", title:"Equipment & History", fields:[
+   {k:"systype",l:"System Type",t:"select",opts:["Straight Cool + Heat Kit","Heat Pump","Mini-Split","Package Unit","Refrigeration"]},
+   {k:"tons",l:"Capacity",t:"select",opts:["1.5 Ton","2 Ton","2.5 Ton","3 Ton","3.5 Ton","4 Ton","5 Ton","Other"]},
+   {k:"ref",l:"Refrigerant",t:"select",opts:["R-454B","R-410A","R-22","R-404A","R-134a"],h:"Check the condenser nameplate — never assume."},
+   {k:"cu_model",l:"Condenser Model",t:"text"},
+   {k:"cu_serial",l:"Condenser Serial",t:"text"},
+   {k:"metering",l:"Metering Device",t:"select",opts:["TXV","Piston / Fixed Orifice","EEV"],h:"TXV: sensing bulb clamped to the suction line at the evaporator outlet. Piston: no bulb, orifice inside the liquid line fitting."},
+   {k:"ah_model",l:"Air Handler Model",t:"text"},
+   {k:"ah_serial",l:"Air Handler Serial",t:"text"},
+   {k:"heatkw",l:"Heat Kit",t:"num",u:"kW",h:"From the heat kit label inside the air handler (e.g., 8 kW, 10 kW)."},
+   {k:"install_date",l:"Installation Date",t:"date"},
+   {k:"installed_by",l:"Installed By (Company)",t:"text"},
+   {k:"tstat",l:"Thermostat Model",t:"text"},
+ ]},
+ {id:"elec", title:"Electrical Readings", note:"Take all amp readings with the system running at steady state (5+ minutes of runtime). Nameplate values come from the condenser data plate and motor labels.", fields:[
+   {k:"volts",l:"Supply Voltage L1–L2",t:"num",u:"V",h:"Meter leads across L1 and L2 at the condenser disconnect or contactor line side, unit running."},
+   {k:"volts24",l:"Control Voltage",t:"num",u:"V",h:"Measure R to C at the air handler control board or thermostat terminals."},
+   {k:"comp_rla",l:"Compressor RLA (nameplate)",t:"num",u:"A",h:"Rated Load Amps from the condenser data plate. Measured amps should run well below this number."},
+   {k:"comp_amp",l:"Compressor Amps (measured)",t:"num",u:"A",h:"Clamp meter on the common wire to the compressor (usually the wire from the contactor to the C terminal)."},
+   {k:"cfan_fla",l:"Condenser Fan FLA (nameplate)",t:"num",u:"A",h:"Full Load Amps from the fan motor label."},
+   {k:"cfan_amp",l:"Condenser Fan Amps (measured)",t:"num",u:"A",h:"Clamp on the fan motor power lead (usually black) with the fan running."},
+   {k:"blower_fla",l:"Blower FLA (nameplate)",t:"num",u:"A",h:"Full Load Amps from the blower motor label inside the air handler."},
+   {k:"blower_amp",l:"Blower Amps (measured)",t:"num",u:"A",h:"Clamp on the blower motor power lead with the blower running on cooling speed."},
+   {k:"heat_amp",l:"Heat Strip Amps (measured)",t:"num",u:"A",h:"Energize heat and clamp one supply leg to the heat kit. Expected amps ≈ (kW × 1000) ÷ voltage."},
+   {k:"breaker_cu",l:"Condenser Breaker",t:"num",u:"A"},
+   {k:"breaker_ah",l:"Air Handler Breaker",t:"num",u:"A"},
+ ]},
+ {id:"caps", title:"Capacitors", note:"Kill power and discharge the capacitor with an insulated screwdriver across the terminals before testing. Set the meter to capacitance (µF). Rated value is printed on the capacitor case. A healthy capacitor reads within ±6% of its rating.", fields:[
+   {k:"cap_herm_rated",l:"Compressor (HERM) Rated",t:"num",u:"µF",h:"On a dual run capacitor, measure C to HERM."},
+   {k:"cap_herm_meas",l:"Compressor (HERM) Measured",t:"num",u:"µF"},
+   {k:"cap_fan_rated",l:"Condenser Fan (FAN) Rated",t:"num",u:"µF",h:"On a dual run capacitor, measure C to FAN."},
+   {k:"cap_fan_meas",l:"Condenser Fan (FAN) Measured",t:"num",u:"µF"},
+   {k:"cap_blower_rated",l:"Blower Capacitor Rated",t:"num",u:"µF",h:"PSC blowers only — ECM/variable-speed blowers have no run capacitor."},
+   {k:"cap_blower_meas",l:"Blower Capacitor Measured",t:"num",u:"µF"},
+ ]},
+ {id:"motor", title:"Motor Winding Test", note:"Use this when a motor won't start, trips the breaker, or hums. Kill power, discharge the capacitor, and disconnect the motor leads so you're only reading the motor. Set the meter to ohms. Enter OL for an open (infinite) reading. For a compressor, test across the three terminals under the terminal cover: Common, Start, Run. For a condenser fan or PSC blower, the same three points are the common lead (usually white or the line lead), the start lead (to the capacitor, usually brown), and the run lead — check the wiring diagram on the motor.", fields:[
+   {k:"motor_type",l:"Motor Being Tested",t:"select",opts:["— Select —","Compressor (single phase)","Condenser Fan Motor","Blower Motor (PSC)"]},
+   {k:"m_cr",l:"Common to Run",t:"text",u:"Ω",h:"Lowest of the three readings on a healthy motor."},
+   {k:"m_cs",l:"Common to Start",t:"text",u:"Ω",h:"Higher than Common-to-Run — the start winding has more turns of thinner wire."},
+   {k:"m_sr",l:"Start to Run",t:"text",u:"Ω",h:"Should roughly equal Common-to-Run + Common-to-Start."},
+   {k:"m_gnd",l:"Any Terminal to Ground",t:"text",u:"Ω",h:"One lead on a motor terminal, the other on bare copper (suction line) or the motor casing with paint scraped. Must read OL — any continuity means a grounded winding."},
+ ]},
+ {id:"refr", title:"Refrigerant Circuit", note:"Superheat and subcooling calculate automatically from the selected refrigerant's pressure-temperature curve (approximate, mid-glide for blends). The manufacturer charging chart on the unit always governs final charge.", fields:[
+   {k:"p_suct",l:"Suction Pressure",t:"num",u:"psig",h:"Low-side gauge on the suction service port at the condenser."},
+   {k:"p_liq",l:"Liquid Pressure",t:"num",u:"psig",h:"High-side gauge on the liquid line service port."},
+   {k:"t_suct",l:"Suction Line Temp",t:"num",u:"°F",h:"Clamp thermometer on the suction line 4–6 inches from the condenser, insulated from ambient."},
+   {k:"t_liq",l:"Liquid Line Temp",t:"num",u:"°F",h:"Clamp thermometer on the liquid line at the condenser."},
+   {k:"t_od",l:"Outdoor Ambient",t:"num",u:"°F",h:"In the shade, near the condenser air intake."},
+   {k:"charge_added",l:"Charge Adjusted",t:"text",u:"oz",h:"Positive for added, negative for recovered."},
+ ]},
+ {id:"air", title:"Airflow & Static Pressure", note:"Static pressure is the blood pressure of the duct system. Drill test ports and use a manometer: RETURN static just before the filter/coil (reads negative — enter the magnitude), SUPPLY static just after the blower before the first takeoff (reads positive). Total External Static Pressure totals automatically and should be at or under the equipment rating — 0.50 inches of water column for most residential units.", fields:[
+   {k:"t_ret_db",l:"Return Air Dry Bulb",t:"num",u:"°F",h:"In the return plenum or at the filter grille."},
+   {k:"t_ret_wb",l:"Return Air Wet Bulb",t:"num",u:"°F",h:"Wet bulb or a psychrometer reading at the return. Needed to calculate target superheat for piston systems."},
+   {k:"t_sup_db",l:"Supply Air Dry Bulb",t:"num",u:"°F",h:"In the supply plenum, out of line-of-sight of the coil to avoid radiant error."},
+   {k:"static_ret",l:"Return Static (magnitude)",t:"num",u:"inWC"},
+   {k:"static_sup",l:"Supply Static",t:"num",u:"inWC"},
+   {k:"filter_drop",l:"Filter Pressure Drop",t:"num",u:"inWC",h:"Static reading across the filter alone (before vs after). Over 0.25 means the filter is eating your airflow."},
+   {k:"filter",l:"Filter Size / Type",t:"text",cls:"full"},
+ ], tesp:true},
+ {id:"refrig", title:"Refrigeration (Walk-ins / Coolers)", note:"For refrigeration equipment, use the Refrigerant Circuit section above for pressures and line temps (select R-404A or R-134a), then add box readings here. The key number is coil temperature difference: box temperature minus the evaporator saturation temperature, typically 8–12°F on a standard walk-in.", fields:[
+   {k:"box_app",l:"Application",t:"select",opts:["— Select —","Walk-in Cooler (Medium Temp)","Walk-in Freezer (Low Temp)","Reach-in / Display Case"]},
+   {k:"box_temp",l:"Box Temperature",t:"num",u:"°F",h:"Thermometer in the return airstream to the evaporator, not near the door."},
+   {k:"box_target",l:"Target Box Temperature",t:"num",u:"°F",h:"Typical: cooler 35–38°F, freezer -10 to 0°F."},
+ ]},
+ {id:"checks", title:"Live System Checks", note:"Technician reference only — these do not appear on the customer PDF unless you check the box in Notes & Signatures.", feed:true},
+ {id:"chk_startup", title:"Startup Checklist", modes:["startup"], checks:[
+   "Float switch(es) installed and tested — system shuts down",
+   "Drain line flushed, treated, and flowing at termination",
+   "Hurricane tie-down straps installed and anchored",
+   "Line set connections leak-checked",
+   "Disconnect and high-voltage lugs tight / torqued",
+   "Low-voltage connections secure",
+   "Capacitor(s) measured within spec",
+   "Thermostat cycles system in all modes",
+   "New filter installed",
+   "Condensate pan clean and pitched",
+   "Work area cleaned, old equipment hauled away",
+ ]},
+ {id:"diagf", title:"Diagnosis & Repair", modes:["diag"], fields:[
+   {k:"complaint",l:"Customer Complaint",t:"area",cls:"full"},
+   {k:"findings",l:"Findings / Diagnosis",t:"area",cls:"full"},
+   {k:"repair",l:"Repair Performed",t:"area",cls:"full"},
+   {k:"parts",l:"Parts Used",t:"text",cls:"full"},
+ ]},
+ {id:"chk_service", title:"Maintenance Checklist", modes:["service"], checks:[
+   "Condenser coil washed",
+   "Evaporator coil inspected / cleaned as needed",
+   "Drain line flushed, treated, and flow verified",
+   "Float switch(es) tested",
+   "Capacitor(s) tested within ±6% of rating",
+   "Contactor inspected for pitting / wear",
+   "Blower wheel and housing clean",
+   "Electrical connections inspected and tightened",
+   "Refrigerant charge verified (superheat / subcooling recorded above)",
+   "Filter replaced",
+   "Thermostat operation and calibration verified",
+   "Heat strips energized and amp draw verified",
+ ], fields:[
+   {k:"next_due",l:"Next Service Due",t:"date"},
+   {k:"plan",l:"Maintenance Plan",t:"select",opts:["First Due Comfort Club — Active","One-Time Tune-Up","Not Enrolled"]},
+ ]},
+ {id:"notes", title:"Notes & Signatures", fields:[
+   {k:"notes",l:"Notes / Recommendations",t:"area",cls:"full"},
+ ], sigs:true},
+];
+
+// ============ PT TABLES (approx, psig) ============
+const PT = {
+ "R-410A":{t:[0,10,20,30,40,50,60,70,80,90,100,110,120,130],p:[48.2,62.3,78.3,96.8,118.1,142.2,169.6,200.6,235.4,274.3,317.4,365.0,417.4,474.9]},
+ "R-454B":{t:[0,10,20,30,40,50,60,70,80,90,100,110,120,130],p:[42.0,55.0,70.0,87.0,106.5,129.0,155.0,184.5,217.5,254.5,296.0,342.0,392.5,448.0]},
+ "R-22":{t:[0,10,20,30,40,50,60,70,80,90,100,110,120,130],p:[24.0,32.8,43.1,54.9,68.5,84.1,101.6,121.4,143.7,168.4,195.9,226.3,259.9,296.8]},
+ "R-404A":{t:[-40,-30,-20,-10,0,10,20,30,40,50,60,70,80,90,100,110,120],p:[4.5,9.9,16.3,24.1,33.3,44.3,57.1,72.1,89.3,109.2,131.8,157.4,186.3,218.8,255.0,295.3,340.0]},
+ "R-134a":{t:[-10,0,10,20,30,40,50,60,70,80,90,100,110,120],p:[1.8,6.5,11.9,18.4,26.1,35.0,45.4,57.4,71.1,86.7,104.3,124.2,146.3,171.1]},
+};
+function satTemp(ref,psig){
+  const d=PT[ref]; if(!d||psig==null)return null;
+  if(psig<=d.p[0])return d.t[0]; if(psig>=d.p[d.p.length-1])return d.t[d.t.length-1];
+  for(let i=1;i<d.p.length;i++){ if(psig<=d.p[i]){
+    const f=(psig-d.p[i-1])/(d.p[i]-d.p[i-1]);
+    return d.t[i-1]+f*(d.t[i]-d.t[i-1]); }}
+  return null;
+}
+
+// ============ BUILD UI ============
+const app=document.getElementById("app");
+SECTIONS.forEach(s=>{
+  const d=document.createElement("details"); d.open=true; d.id="sec-"+s.id;
+  if(s.modes)d.dataset.modes=s.modes.join(",");
+  let inner=`<summary>${s.title}<span class="chev">▶</span></summary><div class="body">`;
+  if(s.note) inner+=`<div class="badge-note">${s.note}</div>`;
+  if(s.fields){
+    inner+=`<div class="grid">`;
+    s.fields.forEach(f=>{
+      const cls=f.cls?` class="${f.cls}"`:"";
+      inner+=`<div${cls}><label class="f" for="${f.k}">${f.l}</label>`;
+      if(f.t==="select"){
+        inner+=`<select id="${f.k}">${f.opts.map(o=>`<option>${o}</option>`).join("")}</select>`;
+      }else if(f.t==="area"){
+        inner+=`<textarea id="${f.k}"></textarea>`;
+      }else{
+        const im=f.t==="num"?` inputmode="decimal"`:"";
+        const type=f.t==="date"?"date":"text";
+        if(f.u){ inner+=`<div class="unit"><input type="${type}" id="${f.k}"${im}><span>${f.u}</span></div>`; }
+        else{ inner+=`<input type="${type}" id="${f.k}"${im}>`; }
+      }
+      if(f.h) inner+=`<div class="fhint">${f.h}</div>`;
+      inner+=`</div>`;
+    });
+    inner+=`</div>`;
+  }
+  if(s.tesp) inner+=`<div class="tesp"><b id="tespv">—</b><span>Total External Static Pressure</span></div>`;
+  if(s.feed) inner+=`<div id="feed"><div class="empty-feed">Checks appear here as readings are entered.</div></div>`;
+  if(s.checks){
+    s.checks.forEach((c,i)=>{ inner+=`<label class="check"><input type="checkbox" id="${s.id}_${i}"><span>${c}</span></label>`; });
+  }
+  if(s.sigs){
+    inner+=`<label class="check" style="border:0;padding-left:0"><input type="checkbox" id="inc_checks"><span>Include System Checks results on the customer PDF</span></label>
+      <label class="f">Technician Signature</label><canvas class="sig" id="sig_tech"></canvas>
+      <div class="sig-tools"><span class="hint">Sign with finger</span><button type="button" onclick="clearSig('sig_tech')">Clear</button></div>
+      <label class="f">Customer Acceptance Signature</label><canvas class="sig" id="sig_cust"></canvas>
+      <div class="sig-tools"><span class="hint">Customer acknowledges work performed</span><button type="button" onclick="clearSig('sig_cust')">Clear</button></div>
+      <div class="rowbtns">
+        <button class="btn btn-ghost" type="button" onclick="emailSummary()">Email Summary</button>
+        <button class="btn btn-ghost" type="button" onclick="resetForm()">New Report</button>
+      </div>
+      <p class="hint">PDF builds a signed report — save to Files/Drive and attach to the invoice. Email Summary pre-fills your mail app; attach the PDF before sending.</p>`;
+  }
+  inner+=`</div>`;
+  d.innerHTML=inner; app.appendChild(d);
+});
+document.getElementById("date").valueAsDate=new Date();
+
+// ============ MODE SWITCHING ============
+document.getElementById("modes").addEventListener("click",e=>{
+  const b=e.target.closest("button"); if(!b)return;
+  MODE=b.dataset.mode;
+  document.querySelectorAll("#modes button").forEach(x=>x.classList.toggle("on",x===b));
+  document.getElementById("plate-sub").textContent=MODES[MODE].sub;
+  applyMode();
+});
+function applyMode(){
+  document.querySelectorAll("[data-modes]").forEach(el=>{
+    el.dataset.modes.split(",").includes(MODE)?el.removeAttribute("data-hide"):el.setAttribute("data-hide","1");
+  });
+}
+applyMode();
+
+// ============ VALUE HELPERS ============
+const V=id=>{const e=document.getElementById(id);const n=parseFloat(e&&e.value);return isNaN(n)?null:n;}
+const G=id=>{const e=document.getElementById(id);return e?(e.value||""):"";}
+// Ohm parser: number, or OL/open/inf -> Infinity, blank -> null
+function ohm(id){
+  const raw=G(id).trim().toLowerCase(); if(!raw)return null;
+  if(["ol","o.l","open","inf","infinite","∞"].includes(raw))return Infinity;
+  const n=parseFloat(raw); return isNaN(n)?null:n;
+}
+// Range describer: how far off a lo–hi target
+function band(v,lo,hi,unit,dec=1){
+  if(v>=lo&&v<=hi)return {in:true,txt:`${v.toFixed(dec)} ${unit} — inside the ${lo}–${hi} ${unit} target`};
+  const off=v<lo?lo-v:v-hi;
+  return {in:false,txt:`${v.toFixed(dec)} ${unit} — ${off.toFixed(dec)} ${unit} ${v<lo?"BELOW":"ABOVE"} the ${lo}–${hi} ${unit} target`};
+}
+function core(){
+  const ref=G("ref");
+  const satS=satTemp(ref,V("p_suct")), satL=satTemp(ref,V("p_liq"));
+  const sh=(satS!=null&&V("t_suct")!=null)?V("t_suct")-satS:null;
+  const sc=(satL!=null&&V("t_liq")!=null)?satL-V("t_liq"):null;
+  const dt=(V("t_ret_db")!=null&&V("t_sup_db")!=null)?V("t_ret_db")-V("t_sup_db"):null;
+  const tesp=(V("static_ret")!=null&&V("static_sup")!=null)?Math.abs(V("static_ret"))+Math.abs(V("static_sup")):null;
+  // Target superheat for piston systems: (3 x indoor wet bulb - 80 - outdoor dry bulb) / 2
+  let tsh=null;
+  if(V("t_ret_wb")!=null&&V("t_od")!=null){ tsh=(3*V("t_ret_wb")-80-V("t_od"))/2; if(tsh<0)tsh=0; }
+  const isRefrig=V("box_temp")!=null;
+  return {ref,satS,satL,sh,sc,dt,tesp,tsh,isRefrig};
+}
+
+// ============ CHECK ENGINE ============
+// Plain language, target ranges, deviation, and fix/sell guidance.
+function capCheck(label,rid,mid){
+  const r=V(rid),m=V(mid); if(r==null||m==null||r===0)return null;
+  const dev=(m-r)/r*100;
+  if(Math.abs(dev)<=6)return{s:"ok",m:`${m} microfarads measured against a ${r} microfarad rating (${dev>=0?"+":""}${dev.toFixed(1)}%) — within the ±6% tolerance.`};
+  return{s:"warn",m:`${m} microfarads measured against a ${r} microfarad rating — that is ${Math.abs(dev).toFixed(1)}% ${dev<0?"weak":"over"}, outside the ±6% tolerance. Replace the capacitor now: a weak capacitor overheats the motor it serves and is the cheapest failure to prevent. ${label.includes("Compressor")?"If the compressor has been struggling to start on this weak capacitor, recommend adding a hard start kit with the new capacitor to protect it.":""}`};
+}
+const CHECKS=[
+ {n:"Supply voltage", run:c=>{
+   const v=V("volts"); if(v==null)return null;
+   const b=band(v,207,253,"volts",0);
+   if(b.in)return{s:"ok",m:b.txt+" (within ±10% of 230 volt nominal)."};
+   if(v<207)return{s:"warn",m:b.txt+". Low voltage makes every motor pull more amps and run hotter. Verify at the panel under load — look for loose lugs at the disconnect, undersized or corroded conductors, or a utility supply problem. Fix the voltage before condemning any motor."};
+   return{s:"warn",m:b.txt+". Sustained high voltage shortens motor and capacitor life. Verify your meter, then check with the utility."};
+ }},
+ {n:"Control voltage", run:c=>{
+   const v=V("volts24"); if(v==null)return null;
+   const b=band(v,21,28,"volts",1);
+   if(b.in)return{s:"ok",m:b.txt+"."};
+   return{s:"warn",m:b.txt+". Check the transformer output directly: if it reads good at the transformer but low at the thermostat, suspect a low-voltage short, corroded splice, or a long undersized thermostat wire run."};
+ }},
+ {n:"Compressor amp draw", run:c=>{
+   const a=V("comp_amp"),r=V("comp_rla"); if(a==null||r==null||r===0)return null;
+   const pct=a/r*100;
+   if(pct>100)return{s:"warn",m:`${a} amps measured against ${r} amps Rated Load — ${pct.toFixed(0)}%, OVER the nameplate limit. Shut it down and work the list: (1) test the run capacitor — a weak one is the most common cause, (2) check the condenser coil for dirt and blockage, (3) verify charge — high subcooling means overcharge, (4) check supply voltage. If all of those check out, the compressor is mechanically failing — quote the customer a compressor replacement, and if the system is 10+ years old, present full system replacement as the better long-term investment.`};
+   if(pct>=90)return{s:"warn",m:`${a} amps is ${pct.toFixed(0)}% of the ${r} amp rating — running hot. Healthy compressors typically pull 40–80% of Rated Load in Southwest Florida heat. Check the run capacitor, wash the condenser coil, and verify subcooling before you leave. If the compressor is hard-starting (lights dim, long start), a hard start kit is a legitimate protective sale here.`};
+   if(pct<30)return{s:"info",m:`${a} amps is only ${pct.toFixed(0)}% of Rated Load — unusually light. Cross-check: low suction pressure and high superheat mean low charge; normal pressures with low amps can mean a scroll compressor not fully pumping. Compare high and low side — if pressures nearly equalize while running, the compressor is not compressing.`};
+   return{s:"ok",m:`${a} amps — ${pct.toFixed(0)}% of the ${r} amp Rated Load, in the normal 40–80% working band.`};
+ }},
+ {n:"Condenser fan amp draw", run:c=>{
+   const a=V("cfan_amp"),f=V("cfan_fla"); if(a==null||f==null||f===0)return null;
+   const pct=a/f*100;
+   if(pct>100)return{s:"warn",m:`${a} amps measured against ${f} amps Full Load — over nameplate. Check the fan capacitor first, then bearing drag (spin the blade by hand with power off — it should coast freely), and confirm the correct blade and pitch. A fan motor drawing over nameplate is on its way out; quoting the motor and capacitor together now beats a no-cool callback in August.`};
+   if(pct<40)return{s:"info",m:`${a} amps is ${pct.toFixed(0)}% of the ${f} amp rating — light draw is normal for many fan motors, but confirm full speed by feel of the discharge air.`};
+   return{s:"ok",m:`${a} amps — ${pct.toFixed(0)}% of the ${f} amp Full Load rating.`};
+ }},
+ {n:"Blower amp draw", run:c=>{
+   const a=V("blower_amp"),f=V("blower_fla"); if(a==null||f==null||f===0)return null;
+   const pct=a/f*100;
+   if(pct>100)return{s:"warn",m:`${a} amps measured against ${f} amps Full Load — over nameplate. On a PSC blower, check the capacitor and for a dirty blower wheel (caked wheels move less air but load the motor). Note: an ECM blower drawing high amps is usually fighting restrictive ductwork — check the static pressure readings.`};
+   return{s:"ok",m:`${a} amps — ${pct.toFixed(0)}% of the ${f} amp Full Load rating.`};
+ }},
+ {n:"Heat strip draw", run:c=>{
+   const kw=V("heatkw"),a=V("heat_amp"),v=V("volts")||240; if(kw==null||a==null||kw===0)return null;
+   const exp=kw*1000/v; const dev=Math.abs(a-exp)/exp*100;
+   if(dev<=15)return{s:"ok",m:`${a} amps against roughly ${exp.toFixed(1)} amps expected for ${kw} kilowatts at ${v} volts.`};
+   return{s:"warn",m:`${a} amps against roughly ${exp.toFixed(1)} amps expected (${dev.toFixed(0)}% off). A low reading almost always means a burned-out element or an open sequencer/limit switch — energize each stage separately and clamp each element leg to find the dead one. Quote the element or sequencer.`};
+ }},
+ {n:"Compressor capacitor", run:c=>capCheck("Compressor","cap_herm_rated","cap_herm_meas")},
+ {n:"Condenser fan capacitor", run:c=>capCheck("Fan","cap_fan_rated","cap_fan_meas")},
+ {n:"Blower capacitor", run:c=>capCheck("Blower","cap_blower_rated","cap_blower_meas")},
+ {n:"Motor winding test", run:c=>{
+   const type=G("motor_type"); if(!type||type.startsWith("—"))return null;
+   const cr=ohm("m_cr"),cs=ohm("m_cs"),sr=ohm("m_sr"),gnd=ohm("m_gnd");
+   if(cr==null&&cs==null&&sr==null&&gnd==null)return null;
+   const isComp=type.startsWith("Compressor");
+   // Ground fault is the killer — check first
+   if(gnd!=null&&gnd!==Infinity){
+     return{s:"warn",m:`${type}: ${gnd} ohms from winding to ground — a healthy motor reads OL (infinite). This motor is GROUNDED. ${isComp?"A grounded compressor is not repairable in the field: quote compressor replacement, and on a system 10+ years old present full system replacement — the acid a burnout leaves in the refrigerant circuit shortens the life of a replacement compressor unless the system is properly flushed with suction/liquid filter driers installed.":"Replace the motor. Also inspect the wiring where it enters the motor for chafed insulation before condemning."}`};
+   }
+   // Opens
+   const opens=[["Common to Run",cr],["Common to Start",cs],["Start to Run",sr]].filter(x=>x[1]===Infinity).map(x=>x[0]);
+   if(opens.length){
+     return{s:"warn",m:`${type}: OPEN reading on ${opens.join(" and ")} — that winding is not conducting. ${isComp?"IMPORTANT: if the compressor shell is hot to the touch, the internal overload may be tripped and will read open until it cools — cool the shell with water for 20–30 minutes and retest before condemning it. If it reads open cold, the winding is burned: quote compressor replacement.":"If the motor has an internal thermal fuse it may read open when overheated — let it cool and retest. Open when cool means a burned winding: replace the motor, and always replace its capacitor at the same time."}`};
+   }
+   if(cr!=null&&cs!=null&&sr!=null){
+     const sum=cr+cs; const dev=Math.abs(sr-sum)/sum*100;
+     const rel=(cs>cr)?"Start winding reads higher than Run winding as expected. ":"CAUTION: Common-to-Start should read HIGHER than Common-to-Run — if yours is reversed, re-check which terminal is which. ";
+     if(dev<=15)return{s:"ok",m:`${type}: windings check out — Start-to-Run (${sr}Ω) matches Common-to-Run + Common-to-Start (${cr}+${cs}=${sum.toFixed(1)}Ω) within ${dev.toFixed(0)}%, nothing open, nothing grounded. ${rel}If this motor still won't start with good windings, the problem is upstream: capacitor, contactor, or voltage.`};
+     return{s:"warn",m:`${type}: the winding math is off — Start-to-Run (${sr}Ω) should roughly equal Common-to-Run + Common-to-Start (${sum.toFixed(1)}Ω) but deviates ${dev.toFixed(0)}%. Suspect shorted turns inside a winding (partial short reads low). A partially shorted motor may run but pulls high amps and trips on overload — cross-check the measured amps above. Recommend replacement before it fails completely.`};
+   }
+   return{s:"info",m:`${type}: enter all three terminal-pair readings plus the ground check for a full winding diagnosis.`};
+ }},
+ {n:"Superheat", run:c=>{
+   if(c.sh==null)return null; const m=G("metering");
+   if(m==="Piston / Fixed Orifice"){
+     if(c.tsh!=null){
+       const lo=Math.max(c.tsh-3,0),hi=c.tsh+3;
+       const b=band(c.sh,Math.round(lo),Math.round(hi),"degrees");
+       if(b.in)return{s:"ok",m:`Superheat ${b.txt} (target calculated from ${V("t_ret_wb")}° indoor wet bulb and ${V("t_od")}° outdoor: ${c.tsh.toFixed(0)}°).`};
+       if(c.sh<lo)return{s:"warn",m:`Superheat ${b.txt}. On a piston system, low superheat means too much refrigerant for today's conditions or low indoor load — recover charge carefully and watch for liquid floodback to the compressor.`};
+       return{s:"warn",m:`Superheat ${b.txt}. High superheat on a piston system means undercharge or a liquid line restriction. Weigh in charge toward the calculated target; if pressures won't respond to added charge, look for a restriction (plugged filter drier, kinked liquid line — a temperature drop across the drier confirms it).`};
+     }
+     return{s:"info",m:`Superheat is ${c.sh.toFixed(1)} degrees. Enter indoor wet bulb and outdoor temperature above and the tool will calculate the target superheat for this piston system automatically.`};
+   }
+   const b=band(c.sh,5,15,"degrees");
+   if(b.in)return{s:"ok",m:`Superheat ${b.txt} — the expansion valve is feeding the coil correctly.`};
+   if(c.sh<5)return{s:"warn",m:`Superheat ${b.txt}. LOW superheat means liquid refrigerant may be reaching the compressor — that washes out bearings and kills compressors. Check that the expansion valve sensing bulb is strapped tight to the suction line and insulated; a loose bulb overfeeds the coil. Low airflow (dirty filter or coil) can also cause this — check the temperature split and static pressure.`};
+   return{s:"warn",m:`Superheat ${b.txt}. HIGH superheat means the coil is starving. Read it together with subcooling below: LOW subcooling + high superheat = low on charge (find the leak before topping off). NORMAL or HIGH subcooling + high superheat = a restriction (plugged filter drier, kinked liquid line, or a failing expansion valve). Feel across the filter drier — a temperature drop means it's plugged; quote a drier replacement.`};
+ }},
+ {n:"Subcooling", run:c=>{
+   if(c.sc==null)return null;
+   const b=band(c.sc,6,14,"degrees");
+   if(b.in)return{s:"ok",m:`Subcooling ${b.txt} (verify against the nameplate target — many units specify 8–12).`};
+   if(c.sc<6)return{s:"warn",m:`Subcooling ${b.txt}. LOW subcooling means not enough liquid refrigerant in the condenser — the system is undercharged or leaking. On any system that was previously charged correctly, low subcooling means a LEAK: sell the leak search first, not just a top-off. Topping off a leaker is a repeat callback, and with R-410A prices climbing during the phase-down, finding the leak pays for itself.`};
+   return{s:"warn",m:`Subcooling ${b.txt}. HIGH subcooling means refrigerant is stacking in the condenser: overcharge (common on install day — recover to the nameplate target), a restriction in the liquid line or filter drier, or an expansion valve that has shut down and is underfeeding. High subcooling together with high superheat points squarely at a restriction or failed expansion valve.`};
+ }},
+ {n:"Temperature split across the coil", run:c=>{
+   if(c.dt==null||c.isRefrig)return null;
+   const b=band(c.dt,16,23,"degrees");
+   if(b.in)return{s:"ok",m:`Temperature split ${b.txt} — the coil is removing heat like it should.`};
+   if(c.dt>23)return{s:"warn",m:`Temperature split ${b.txt}. A HIGH split almost always means LOW AIRFLOW: dirty filter, matted evaporator coil, closed or crushed ducts, or blower speed set too low. Check the static pressure readings — they will tell you where the restriction lives. Fix airflow before touching the charge; low airflow fakes out every refrigerant reading.`};
+   return{s:"warn",m:`Temperature split ${b.txt}. A LOW split means weak capacity or excess airflow. Cross-check superheat and subcooling for a charge problem. Note: on a humid Southwest Florida day with a hot, moisture-loaded house, a fresh start can read low for the first 15–20 minutes while the coil wrings out humidity — let it run and re-measure before condemning anything.`};
+ }},
+ {n:"Total external static pressure", run:c=>{
+   if(c.tesp==null)return null;
+   if(c.tesp<=0.5)return{s:"ok",m:`${c.tesp.toFixed(2)} inches of water column — at or under the 0.50 rating most residential equipment is designed for.`};
+   const r=Math.abs(V("static_ret")),s=Math.abs(V("static_sup"));
+   const side=r>s?`The RETURN side (${r.toFixed(2)}) is the bigger restriction — look at the filter, an undersized or crushed return, or a return grille that's too small.`:`The SUPPLY side (${s.toFixed(2)}) is the bigger restriction — look for an undersized supply trunk, crushed flex runs, or closed dampers/registers.`;
+   if(c.tesp<=0.8)return{s:"warn",m:`${c.tesp.toFixed(2)} inches of water column — ${(c.tesp-0.5).toFixed(2)} over the 0.50 design rating. ${side} A variable-speed blower will hide this by ramping up, but it pays for it in watts and motor life. This is where a return upgrade or duct repair quote is doing the customer a real favor.`};
+   return{s:"warn",m:`${c.tesp.toFixed(2)} inches of water column — severely restrictive (over 0.80). ${side} This duct system is choking the equipment: capacity, efficiency, and equipment life all suffer until airflow is fixed. Quote duct corrections — a new system installed on these ducts will underperform from day one.`};
+ }},
+ {n:"Filter pressure drop", run:c=>{
+   const f=V("filter_drop"); if(f==null)return null;
+   if(f<=0.15)return{s:"ok",m:`${f.toFixed(2)} inches of water column across the filter — clean and low-restriction.`};
+   if(f<=0.25)return{s:"info",m:`${f.toFixed(2)} inches of water column across the filter — acceptable, but if total static is tight, this filter is spending budget you don't have. High-efficiency 1-inch filters are notorious for this; a 4–5 inch media filter cabinet drops the restriction and only needs changing twice a year — an easy upgrade to offer.`};
+   return{s:"warn",m:`${f.toFixed(2)} inches of water column across the filter alone — the filter is eating half the system's entire static budget. Replace it today, and recommend a media filter cabinet so this stops happening.`};
+ }},
+ {n:"Condensing temperature over ambient", run:c=>{
+   const od=V("t_od"); if(c.satL==null||od==null)return null;
+   const ctoa=c.satL-od; const b=band(ctoa,12,30,"degrees",0);
+   if(b.in)return{s:"ok",m:`The refrigerant is condensing at ${c.satL.toFixed(0)}° against ${od}° outdoor air — ${ctoa.toFixed(0)}° over ambient, in the normal 12–30° window. The condenser is rejecting heat properly.`};
+   if(ctoa>30)return{s:"warn",m:`Condensing ${ctoa.toFixed(0)}° over ambient — head pressure is too high. In order of likelihood: dirty or blocked condenser coil (wash it), condenser fan not moving rated air (check fan amps and capacitor above), overcharge (check subcooling), or the unit is recirculating its own hot discharge air (fence, shrubs, deck too close). High head pressure is what kills compressors in Florida — this one is worth fixing today.`};
+   return{s:"info",m:`Condensing only ${ctoa.toFixed(0)}° over ambient — low head. Often just low charge (check subcooling), or a high-efficiency condenser with a big coil, which is normal. Not automatically a fault.`};
+ }},
+ {n:"Evaporator coil temperature", run:c=>{
+   if(c.satS==null||c.isRefrig)return null;
+   const b=band(c.satS,35,45,"degrees",0);
+   if(b.in)return{s:"ok",m:`Coil saturation ${b.txt} for comfort cooling.`};
+   if(c.satS<32)return{s:"warn",m:`Coil saturation ${b.txt} — FREEZE RISK. Below 32° the coil will ice over, and ice makes airflow worse in a spiral until the system suffocates. Cause is low airflow or low charge. Do not leave it running like this; if it's already iced, thaw completely (fan only) before diagnosing.`};
+   if(c.satS<35)return{s:"info",m:`Coil saturation ${b.txt} — running cold. Watch airflow and re-check after the space pulls down.`};
+   return{s:"info",m:`Coil saturation ${b.txt} — running warm. A hot, humid house on first start is the innocent explanation; excess airflow or an overfeeding valve are the others. Re-check near setpoint.`};
+ }},
+ {n:"Refrigeration coil temperature difference", run:c=>{
+   if(!c.isRefrig||c.satS==null)return null;
+   const td=V("box_temp")-c.satS; const b=band(td,8,12,"degrees",0);
+   if(b.in)return{s:"ok",m:`Box ${V("box_temp")}° minus coil saturation ${c.satS.toFixed(0)}° = ${td.toFixed(0)}° temperature difference — in the standard 8–12° design range for a walk-in.`};
+   if(td>12)return{s:"warn",m:`Coil temperature difference is ${td.toFixed(0)}° — ${(td-12).toFixed(0)}° over the 8–12° design range. The coil is starving or not moving air: check for frost/ice on the evaporator (a failed defrost will bury the coil), dirty coil, dead evaporator fan, or low charge (confirm with superheat and subcooling above). On a frosted coil, verify the defrost timer, heaters, and termination switch.`};
+   return{s:"warn",m:`Coil temperature difference is only ${td.toFixed(0)}° — under the 8–12° design range. Usually light load (empty box, doors just closed) or an oversized coil; if the box also can't reach temperature, look at compressor performance and check for a flooded coil.`};
+ }},
+ {n:"Refrigeration box temperature", run:c=>{
+   const bt=V("box_temp"),tg=V("box_target"); if(bt==null||tg==null)return null;
+   const off=bt-tg;
+   if(Math.abs(off)<=3)return{s:"ok",m:`Box is holding ${bt}° against a ${tg}° target.`};
+   if(off>3)return{s:"warn",m:`Box is ${off.toFixed(0)}° WARM of the ${tg}° target. Work the basics before the refrigerant: door gaskets and door closers (a leaking gasket in Florida humidity ices the coil and loads the box), evaporator fans running, coil clear of frost, condenser coil clean. Then evaluate charge and compressor performance with the readings above.`};
+   return{s:"info",m:`Box is running ${Math.abs(off).toFixed(0)}° COLDER than target — check the thermostat/controller setpoint and calibration; product freezing in a cooler is a product-loss claim waiting to happen.`};
+ }},
+];
+
+// ============ LIVE UPDATE ============
+function refresh(){
+  const c=core();
+  setPill("pill-sh",c.sh,v=>v>=5&&v<=15);
+  setPill("pill-sc",c.sc,v=>v>=6&&v<=14);
+  setPill("pill-dt",c.dt,v=>v>=16&&v<=23);
+  document.getElementById("tespv").textContent=c.tesp==null?"—":c.tesp.toFixed(2)+" inWC";
+  const feed=document.getElementById("feed");
+  const results=CHECKS.map(k=>({n:k.n,r:k.run(c)})).filter(x=>x.r);
+  window._checkResults=results;
+  if(!results.length){feed.innerHTML=`<div class="empty-feed">Checks appear here as readings are entered.</div>`;}
+  else{
+    const order={warn:0,info:1,ok:2};
+    results.sort((a,b)=>order[a.r.s]-order[b.r.s]);
+    feed.innerHTML=results.map(x=>`<div class="chk-item ${x.r.s}"><span class="dot"></span><div><b>${x.n}:</b> ${x.r.m}</div></div>`).join("");
+  }
+  const warns=results.filter(x=>x.r.s==="warn").length;
+  const badge=document.getElementById("alertn");
+  badge.style.display=warns?"block":"none"; badge.textContent=warns;
+  return c;
+}
+function setPill(id,v,okFn){
+  const el=document.getElementById(id);
+  el.className="pill"+(v==null?"":(okFn(v)?" ok":" warn"));
+  el.querySelector("b").textContent=v==null?"—":v.toFixed(1)+"°";
+}
+document.addEventListener("input",refresh);
+document.addEventListener("change",refresh);
+
+// ============ SIGNATURES ============
+function initSig(id){
+  const c=document.getElementById(id);
+  const fit=()=>{const r=c.getBoundingClientRect();
+    if(r.width&&c.width!==Math.round(r.width*2)){ c.width=Math.round(r.width*2); c.height=240;
+      const x=c.getContext("2d"); x.scale(2,2); x.lineWidth=2; x.lineCap="round"; x.strokeStyle="#1B2A4A"; }};
+  fit(); window.addEventListener("resize",fit);
+  const x=c.getContext("2d"); let draw=false,last=null;
+  const pos=e=>{const r=c.getBoundingClientRect();const p=e.touches?e.touches[0]:e;
+    return {x:p.clientX-r.left,y:p.clientY-r.top};};
+  const start=e=>{fit();draw=true;last=pos(e);c.dataset.signed="1";e.preventDefault();};
+  const move=e=>{if(!draw)return;const p=pos(e);x.beginPath();x.moveTo(last.x,last.y);x.lineTo(p.x,p.y);x.stroke();last=p;e.preventDefault();};
+  const end=()=>draw=false;
+  c.addEventListener("mousedown",start);c.addEventListener("mousemove",move);window.addEventListener("mouseup",end);
+  c.addEventListener("touchstart",start,{passive:false});c.addEventListener("touchmove",move,{passive:false});c.addEventListener("touchend",end);
+}
+function clearSig(id){const c=document.getElementById(id);c.getContext("2d").clearRect(0,0,c.width,c.height);c.dataset.signed="";}
+initSig("sig_tech");initSig("sig_cust");
+
+// ============ PDF ============
+function makePDF(){
+  const {jsPDF}=window.jspdf; const doc=new jsPDF({unit:"pt",format:"letter"});
+  const W=doc.internal.pageSize.getWidth(); const c=refresh();
+  doc.setFillColor(27,42,74); doc.rect(0,0,W,86,"F");
+  doc.setFillColor(217,164,65); doc.rect(0,86,W,4,"F");
+  doc.setTextColor(255,255,255); doc.setFont("helvetica","bold"); doc.setFontSize(18);
+  doc.text("FIRST DUE COOLING",40,38);
+  doc.setFontSize(10); doc.setTextColor(217,164,65);
+  doc.text(MODES[MODE].pdf,40,56);
+  doc.setTextColor(220,225,235); doc.setFont("helvetica","normal"); doc.setFontSize(9);
+  doc.text("Southwest Florida  •  FL Lic. CAC_______  •  firstduecooling.com",40,72);
+  doc.setFontSize(9); doc.setTextColor(255,255,255);
+  doc.text("Date: "+G("date"),W-40,38,{align:"right"});
+  doc.text("Job #: "+(G("invoice")||"—"),W-40,52,{align:"right"});
+
+  const tbl=(title,body)=>{
+    doc.autoTable({ startY:doc.lastAutoTable?doc.lastAutoTable.finalY+14:104,
+      head:[[{content:title,colSpan:4,styles:{fillColor:[27,42,74],textColor:255,fontStyle:"bold",fontSize:9}}]],
+      body, theme:"grid",
+      styles:{fontSize:8.5,cellPadding:4,textColor:[26,29,35],lineColor:[216,220,228]},
+      columnStyles:{0:{fontStyle:"bold",cellWidth:118},2:{fontStyle:"bold",cellWidth:118}},
+      margin:{left:40,right:40} });
+  };
+  const fmt=v=>v==null?"—":v.toFixed(1)+" °F";
+  tbl("JOB & EQUIPMENT",[
+    ["Customer",G("customer"),"Technician(s)",G("tech")],
+    ["Address",{content:G("address"),colSpan:3}],
+    ["System",G("systype")+"  •  "+G("tons"),"Refrigerant",G("ref")],
+    ["Condenser",G("cu_model")+"  S/N "+G("cu_serial"),"Air Handler",G("ah_model")+"  S/N "+G("ah_serial")],
+    ["Installed",(G("install_date")||"—")+"  by "+(G("installed_by")||"—"),"Heat Kit",G("heatkw")+" kW"],
+    ["Metering Device",G("metering"),"Thermostat",G("tstat")],
+  ]);
+  tbl("ELECTRICAL",[
+    ["Supply Voltage",G("volts")+" V","Control Voltage",G("volts24")+" V"],
+    ["Compressor",G("comp_amp")+" A  (RLA "+G("comp_rla")+" A)","Condenser Fan",G("cfan_amp")+" A  (FLA "+G("cfan_fla")+" A)"],
+    ["Blower",G("blower_amp")+" A  (FLA "+G("blower_fla")+" A)","Heat Strips",G("heat_amp")+" A"],
+    ["Condenser Breaker",G("breaker_cu")+" A","Air Handler Breaker",G("breaker_ah")+" A"],
+  ]);
+  const capsAny=["cap_herm_rated","cap_herm_meas","cap_fan_rated","cap_fan_meas","cap_blower_rated","cap_blower_meas"].some(k=>G(k));
+  if(capsAny) tbl("CAPACITORS (rated / measured)",[
+    ["Compressor (HERM)",G("cap_herm_rated")+" / "+G("cap_herm_meas")+" µF","Condenser Fan (FAN)",G("cap_fan_rated")+" / "+G("cap_fan_meas")+" µF"],
+    ["Blower",G("cap_blower_rated")+" / "+G("cap_blower_meas")+" µF","",""],
+  ]);
+  const motAny=G("motor_type")&&!G("motor_type").startsWith("—");
+  if(motAny) tbl("MOTOR WINDING TEST — "+G("motor_type").toUpperCase(),[
+    ["Common–Run",G("m_cr")+" Ω","Common–Start",G("m_cs")+" Ω"],
+    ["Start–Run",G("m_sr")+" Ω","To Ground",G("m_gnd")+" Ω"],
+  ]);
+  tbl("REFRIGERANT & AIRFLOW",[
+    ["Suction / Liquid",G("p_suct")+" / "+G("p_liq")+" psig","Line Temps (Suction / Liquid)",G("t_suct")+" / "+G("t_liq")+" °F"],
+    ["Superheat",fmt(c.sh)+(c.tsh!=null&&G("metering")==="Piston / Fixed Orifice"?"  (target "+c.tsh.toFixed(0)+" °F)":""),"Subcooling",fmt(c.sc)],
+    ["Return DB / WB",G("t_ret_db")+" / "+G("t_ret_wb")+" °F","Supply / Temp Split",G("t_sup_db")+" °F  /  "+(c.dt==null?"—":c.dt.toFixed(1)+" °F")],
+    ["Static Return / Supply / Filter",G("static_ret")+" / "+G("static_sup")+" / "+G("filter_drop")+" inWC","Total External Static",c.tesp==null?"—":c.tesp.toFixed(2)+" inWC"],
+    ["Outdoor Ambient",G("t_od")+" °F","Charge Adjusted",G("charge_added")+" oz"],
+    ["Filter",{content:G("filter"),colSpan:3}],
+  ]);
+  if(c.isRefrig) tbl("REFRIGERATION",[
+    ["Application",G("box_app"),"Box / Target",G("box_temp")+" / "+G("box_target")+" °F"],
+  ]);
+  if(document.getElementById("inc_checks").checked&&window._checkResults&&window._checkResults.length){
+    const lab={ok:"PASS",warn:"ATTENTION",info:"NOTE"};
+    tbl("SYSTEM CHECKS",window._checkResults.map(x=>[lab[x.r.s],{content:x.n+" — "+x.r.m,colSpan:3}]));
+  }
+  if(MODE==="diag"){
+    tbl("DIAGNOSIS & REPAIR",[
+      ["Complaint",{content:G("complaint"),colSpan:3}],
+      ["Findings",{content:G("findings"),colSpan:3}],
+      ["Repair Performed",{content:G("repair"),colSpan:3}],
+      ["Parts Used",{content:G("parts"),colSpan:3}],
+    ]);
+  }
+  const ckSec=MODE==="startup"?"chk_startup":(MODE==="service"?"chk_service":null);
+  if(ckSec){
+    const s=SECTIONS.find(x=>x.id===ckSec);
+    tbl(MODE==="startup"?"STARTUP CHECKLIST":"MAINTENANCE CHECKLIST",
+      s.checks.map((cc,i)=>[document.getElementById(ckSec+"_"+i).checked?"[ X ]":"[    ]",{content:cc,colSpan:3}]));
+  }
+  if(MODE==="service"){
+    tbl("SERVICE PLAN",[
+      ["Plan Status",G("plan"),"Next Service Due",G("next_due")||"—"],
+    ]);
+  }
+  if(G("notes")) tbl("NOTES & RECOMMENDATIONS",[[{content:G("notes"),colSpan:4}]]);
+
+  let y=doc.lastAutoTable.finalY+24;
+  if(y>680){doc.addPage();y=60;}
+  doc.setFontSize(8); doc.setTextColor(90,98,114);
+  const sig=(id,label,x)=>{
+    const cv=document.getElementById(id);
+    if(cv.dataset.signed){doc.addImage(cv.toDataURL("image/png"),"PNG",x,y,180,54);}
+    doc.setDrawColor(26,29,35); doc.line(x,y+58,x+180,y+58); doc.text(label,x,y+70);
+  };
+  sig("sig_tech","Technician Signature",40); sig("sig_cust","Customer Acknowledgment",W-220);
+  doc.setTextColor(150,155,165);
+  const disclaimer=MODE==="service"
+    ?"This report documents completion of scheduled preventive maintenance. Readings reflect conditions at time of service."
+    :"Superheat/subcooling derived from field pressure-temperature interpolation (approximate). Readings reflect conditions at time of visit.";
+  doc.text(disclaimer+"  Generated "+new Date().toLocaleString(),40,760,{maxWidth:W-80});
+
+  const tag={startup:"Startup",diag:"Diagnostic",service:"Service"}[MODE];
+  const name=tag+"_"+(G("customer")||"Report").replace(/[^a-z0-9]/gi,"_")+"_"+G("date")+".pdf";
+  doc.save(name);
+}
+
+// ============ EMAIL + RESET ============
+function emailSummary(){
+  const c=refresh(); const f=v=>v==null?"-":v.toFixed(1)+"F";
+  const warns=(window._checkResults||[]).filter(x=>x.r.s==="warn").map(x=>"! "+x.n+": "+x.r.m).join("\n");
+  const body=encodeURIComponent(
+`First Due Cooling - ${MODES[MODE].sub}
+Customer: ${G("customer")}
+Address: ${G("address")}
+Date: ${G("date")}   Job#: ${G("invoice")}
+System: ${G("systype")} ${G("tons")} (${G("ref")}) installed ${G("install_date")||"?"} by ${G("installed_by")||"?"}
+Volts: ${G("volts")}V  Compressor: ${G("comp_amp")}A (RLA ${G("comp_rla")})
+Pressures: ${G("p_suct")}/${G("p_liq")} psig  Superheat: ${f(c.sh)}  Subcooling: ${f(c.sc)}  Temp Split: ${f(c.dt)}  Static: ${c.tesp==null?"-":c.tesp.toFixed(2)}
+${warns?"\nATTENTION ITEMS:\n"+warns+"\n":""}
+Notes: ${G("notes")}
+
+(Full signed PDF report attached.)`);
+  location.href=`mailto:?subject=${encodeURIComponent(MODES[MODE].sub+" - "+G("customer")+" - "+G("date"))}&body=${body}`;
+}
+function resetForm(){
+  if(!confirm("Clear all fields and start a new report?"))return;
+  document.querySelectorAll("input,textarea").forEach(e=>{if(e.type==="checkbox")e.checked=false;else e.value="";});
+  document.querySelectorAll("select").forEach(e=>e.selectedIndex=0);
+  clearSig("sig_tech");clearSig("sig_cust");
+  document.getElementById("date").valueAsDate=new Date(); refresh();
+}
+refresh();
+</script>
+</body>
+</html>
